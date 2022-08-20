@@ -1,6 +1,6 @@
-from selectorLib import Extractor
+from selectorlib import Extractor
 import gspread
 import datetime
-import request
+import requests
 import json
 import re
