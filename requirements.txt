@@ -1,6 +1,5 @@
 datetime
 requests
-re
 json==1.0.0
 conda==4.12.0
 conda-build==3.21.8
