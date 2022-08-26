@@ -7,7 +7,7 @@ import chromedriver_autoinstaller
 
 chromedriver_autoinstaller.install()
 
-csv_file = "output.csv"
+csv_file = "powerstep_insoles.csv"
 main_page = "https://www.amazon.com/s?k=powerstep+insoles"
 page2 = "&page=2"
 pages = [main_page, main_page + page2]
@@ -34,7 +34,7 @@ def main():
         while True:
             # Scroll down to bottom
             driver.execute_script(
-                "window.scrollTo(0, document.body.scrollHeight-2000);"
+                "window.scrollTo(0, document.body.scrollHeight-2500);"
             )
 
             # Wait to load page

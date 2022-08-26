@@ -7,7 +7,7 @@ import chromedriver_autoinstaller
 
 chromedriver_autoinstaller.install()
 
-csv_file = "output.csv"
+csv_file = "bsr_shoe_insoles.csv"
 main_page = "https://www.amazon.com/gp/bestsellers/hpc/3780121"
 page2 = "/ref=zg_bs_pg_2?_encoding=UTF8&pg=2"
 pages = [main_page, main_page + page2]
