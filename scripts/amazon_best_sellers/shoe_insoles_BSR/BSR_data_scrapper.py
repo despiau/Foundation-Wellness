@@ -19,7 +19,7 @@ dt = now.strftime("%Y-%m-%d %H:%M:%S")
 
 def main():
     options = webdriver.ChromeOptions()
-    options.add_argument("headless")
+    #options.add_argument("headless")
     options.add_argument("--log-level=1")
     driver = webdriver.Chrome(options=options)
     results = []
