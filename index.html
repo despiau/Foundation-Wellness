@@ -1,46 +1,425 @@
-const svg = document.getElementById('audio-waves');
-const waves = svg.querySelectorAll('.wave');
-const colors = ['#FFDD00', '#FF0000', '#00BFFF', '#00FF00'];
-let colorIndex = 0;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Recorder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
 
-function changeColor() {
-    waves.forEach(wave => {
-        wave.setAttribute('stroke', colors[colorIndex]);
-    });
-    colorIndex = (colorIndex + 1) % colors.length;
-}
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #1a1a1a;
+        }
 
-function adjustWaveAnimation(wave, scaleY) {
-    wave.style.transform = `scaleY(${scaleY})`;
-}
+        .phone {
+            width: 300px;
+            background: #1e3a8a;
+            padding: 20px;
+            border-radius: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
 
-const recognition = new webkitSpeechRecognition();
-recognition.continuous = true;
-recognition.interimResults = true;
+        .screen {
+            background: #86efac;
+            height: 120px;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            position: relative;
+            overflow: hidden;
+        }
 
-const liveTranscriptElement = document.getElementById('live-transcript');
+        .display-text {
+            font-size: 20px;
+            font-weight: bold;
+            text-align: center;
+            z-index: 2;
+        }
 
-recognition.onresult = function(event) {
-    const result = event.results[event.results.length - 1];
-    const transcript = result[0].transcript.trim();
-    liveTranscriptElement.innerText = transcript;
+        .visualizer {
+            display: flex;
+            gap: 3px;
+            height: 40px;
+            align-items: center;
+            z-index: 2;
+        }
 
-    // Adjust animation based on input length
-    const scaleY = Math.min(2, 1 + transcript.length * 0.05);
-    waves.forEach(wave => adjustWaveAnimation(wave, scaleY));
-};
+        .bar {
+            width: 4px;
+            background: #22c55e;
+            height: 5px;
+            transition: height 0.1s ease;
+        }
 
-recognition.onstart = function() {
-    liveTranscriptElement.style.display = 'block';
-    waves.forEach(wave => wave.style.animationDuration = '0.5s'); // Accelerate animation
-};
+        @keyframes recording {
+            0% { height: 5px; }
+            50% { height: 30px; }
+            100% { height: 5px; }
+        }
 
-recognition.onend = function() {
-    liveTranscriptElement.style.display = 'none';
-    waves.forEach(wave => wave.style.animationDuration = '2s'); // Reset animation
-};
+        .recording .bar {
+            animation: recording 1s ease infinite;
+        }
 
-recognition.start();
+        .bar:nth-child(2) { animation-delay: 0.1s; }
+        .bar:nth-child(3) { animation-delay: 0.2s; }
+        .bar:nth-child(4) { animation-delay: 0.3s; }
+        .bar:nth-child(5) { animation-delay: 0.4s; }
+        .bar:nth-child(6) { animation-delay: 0.5s; }
+        .bar:nth-child(7) { animation-delay: 0.6s; }
+        .bar:nth-child(8) { animation-delay: 0.7s; }
 
-// Change colors every second
-setInterval(changeColor, 1000);
+        .timer {
+            font-family: monospace;
+            font-size: 16px;
+            z-index: 2;
+        }
+
+        .messages {
+            background: white;
+            border-radius: 10px;
+            padding: 10px;
+            margin-bottom: 15px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .message {
+            padding: 8px;
+            border-radius: 6px;
+            margin-bottom: 6px;
+            background: #f3f4f6;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .message:hover {
+            background: #e5e7eb;
+        }
+
+        .message-time {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .btn {
+            border: none;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            font-size: 24px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn:disabled {
+            background: #9ca3af !important;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .btn:active:not(:disabled) {
+            transform: scale(0.95);
+        }
+
+        .call-btn {
+            background: #22c55e;
+        }
+
+        .call-btn:hover:not(:disabled) {
+            background: #16a34a;
+        }
+
+        .record-btn {
+            background: #3b82f6;
+        }
+
+        .record-btn.recording {
+            background: #ef4444;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .end-btn {
+            background: #ef4444;
+        }
+
+        .end-btn:hover:not(:disabled) {
+            background: #dc2626;
+        }
+
+        .status-bar {
+            background: #1f2937;
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+        }
+
+        /* Ripple effect */
+        .ripple {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            transform: scale(0);
+            animation: ripple 0.6s linear;
+            pointer-events: none;
+        }
+
+        @keyframes ripple {
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="phone">
+        <div class="screen" id="screen">
+            <div class="display-text">Ready to Record</div>
+            <div class="visualizer">
+                <div class="bar"></div>
+                <div class="bar"></div>
+                <div class="bar"></div>
+                <div class="bar"></div>
+                <div class="bar"></div>
+                <div class="bar"></div>
+                <div class="bar"></div>
+                <div class="bar"></div>
+            </div>
+            <div class="timer">00:00</div>
+        </div>
+
+        <div class="messages">
+            <div class="empty-message" style="text-align: center; color: #666;">
+                No messages yet
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="btn call-btn" id="callBtn">📞</button>
+            <button class="btn record-btn" id="recordBtn" disabled>🎤</button>
+            <button class="btn end-btn" id="endBtn" disabled>✖️</button>
+        </div>
+
+        <div class="status-bar">
+            <span id="messageCount">Messages: 0</span>
+            <span id="status">IDLE</span>
+        </div>
+    </div>
+
+    <script>
+        class VoiceRecorder {
+            constructor() {
+                this.state = 'idle';
+                this.recordingTime = 0;
+                this.messages = [];
+                this.timerInterval = null;
+                this.setupElements();
+                this.setupEventListeners();
+            }
+
+            setupElements() {
+                this.screen = document.querySelector('.screen');
+                this.displayText = document.querySelector('.display-text');
+                this.timer = document.querySelector('.timer');
+                this.messagesContainer = document.querySelector('.messages');
+                this.callBtn = document.getElementById('callBtn');
+                this.recordBtn = document.getElementById('recordBtn');
+                this.endBtn = document.getElementById('endBtn');
+                this.messageCount = document.getElementById('messageCount');
+                this.status = document.getElementById('status');
+                this.visualizer = document.querySelector('.visualizer');
+            }
+
+            setupEventListeners() {
+                this.callBtn.addEventListener('click', () => this.startCall());
+                this.recordBtn.addEventListener('click', () => this.toggleRecording());
+                this.endBtn.addEventListener('click', () => this.endCall());
+                
+                // Add ripple effect to screen
+                this.screen.addEventListener('click', (e) => this.createRipple(e));
+            }
+
+            createRipple(event) {
+                const ripple = document.createElement('div');
+                ripple.classList.add('ripple');
+                
+                const rect = this.screen.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const y = event.clientY - rect.top;
+                
+                ripple.style.left = `${x}px`;
+                ripple.style.top = `${y}px`;
+                
+                this.screen.appendChild(ripple);
+                
+                ripple.addEventListener('animationend', () => {
+                    ripple.remove();
+                });
+            }
+
+            startCall() {
+                this.state = 'calling';
+                this.updateDisplay('Call started!');
+                this.updateButtons();
+            }
+
+            toggleRecording() {
+                if (this.state === 'recording') {
+                    this.stopRecording();
+                } else {
+                    this.startRecording();
+                }
+            }
+
+            startRecording() {
+                this.state = 'recording';
+                this.updateDisplay('Recording...');
+                this.recordingTime = 0;
+                this.updateButtons();
+                this.visualizer.classList.add('recording');
+                this.startTimer();
+            }
+
+            stopRecording() {
+                this.state = 'calling';
+                this.saveMessage();
+                this.updateDisplay('Message saved!');
+                this.updateButtons();
+                this.visualizer.classList.remove('recording');
+                this.stopTimer();
+            }
+
+            endCall() {
+                if (this.state === 'recording') {
+                    this.stopRecording();
+                }
+                this.state = 'idle';
+                this.updateDisplay('Ready to Record');
+                this.updateButtons();
+                this.visualizer.classList.remove('recording');
+                this.stopTimer();
+            }
+
+            updateDisplay(text) {
+                this.displayText.textContent = text;
+                this.status.textContent = this.state.toUpperCase();
+            }
+
+            updateButtons() {
+                this.callBtn.disabled = this.state !== 'idle';
+                this.recordBtn.disabled = this.state === 'idle';
+                this.endBtn.disabled = this.state === 'idle';
+                
+                if (this.state === 'recording') {
+                    this.recordBtn.classList.add('recording');
+                } else {
+                    this.recordBtn.classList.remove('recording');
+                }
+            }
+
+            startTimer() {
+                this.timerInterval = setInterval(() => {
+                    this.recordingTime++;
+                    if (this.recordingTime >= 30) {
+                        this.stopRecording();
+                        return;
+                    }
+                    this.updateTimer();
+                }, 1000);
+            }
+
+            stopTimer() {
+                clearInterval(this.timerInterval);
+                this.recordingTime = 0;
+                this.updateTimer();
+            }
+
+            updateTimer() {
+                const minutes = Math.floor(this.recordingTime / 60);
+                const seconds = this.recordingTime % 60;
+                this.timer.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }
+
+            saveMessage() {
+                const message = {
+                    id: this.messages.length + 1,
+                    duration: this.recordingTime,
+                    timestamp: new Date().toLocaleTimeString()
+                };
+                this.messages.push(message);
+                this.updateMessages();
+            }
+
+            updateMessages() {
+                if (this.messages.length === 0) {
+                    this.messagesContainer.innerHTML = `
+                        <div class="empty-message" style="text-align: center; color: #666;">
+                            No messages yet
+                        </div>
+                    `;
+                } else {
+                    this.messagesContainer.innerHTML = this.messages.map(msg => `
+                        <div class="message" onclick="voiceRecorder.playMessage(${msg.id})">
+                            <div>Message ${msg.id}</div>
+                            <div class="message-time">
+                                Duration: ${Math.floor(msg.duration / 60)}:${(msg.duration % 60).toString().padStart(2, '0')}
+                                <br>
+                                ${msg.timestamp}
+                            </div>
+                        </div>
+                    `).join('');
+                }
+                this.messageCount.textContent = `Messages: ${this.messages.length}`;
+            }
+
+            playMessage(id) {
+                if (this.state === 'idle') {
+                    const message = this.messages.find(m => m.id === id);
+                    if (message) {
+                        this.updateDisplay(`Playing Message ${id}`);
+                        setTimeout(() => {
+                            this.updateDisplay('Ready to Record');
+                        }, 2000);
+                    }
+                }
+            }
+        }
+
+        const voiceRecorder = new VoiceRecorder();
+    </script>
+</body>
+</html>
