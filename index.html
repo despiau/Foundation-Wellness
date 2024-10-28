@@ -30,7 +30,7 @@
 
         .screen {
             background: #86efac;
-            height: 120px;
+            height: 150px;
             border-radius: 10px;
             padding: 15px;
             margin-bottom: 15px;
@@ -38,54 +38,30 @@
             flex-direction: column;
             align-items: center;
             justify-content: space-between;
-            position: relative;
-            overflow: hidden;
         }
 
         .display-text {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: bold;
             text-align: center;
-            z-index: 2;
+        }
+
+        .transcript {
+            font-size: 14px;
+            text-align: center;
+            height: 60px;
+            overflow-y: auto;
+            width: 100%;
+            padding: 5px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 5px;
         }
 
         .visualizer {
-            display: flex;
-            gap: 3px;
+            width: 100%;
             height: 40px;
-            align-items: center;
-            z-index: 2;
-        }
-
-        .bar {
-            width: 4px;
-            background: #22c55e;
-            height: 5px;
-            transition: height 0.1s ease;
-        }
-
-        @keyframes recording {
-            0% { height: 5px; }
-            50% { height: 30px; }
-            100% { height: 5px; }
-        }
-
-        .recording .bar {
-            animation: recording 1s ease infinite;
-        }
-
-        .bar:nth-child(2) { animation-delay: 0.1s; }
-        .bar:nth-child(3) { animation-delay: 0.2s; }
-        .bar:nth-child(4) { animation-delay: 0.3s; }
-        .bar:nth-child(5) { animation-delay: 0.4s; }
-        .bar:nth-child(6) { animation-delay: 0.5s; }
-        .bar:nth-child(7) { animation-delay: 0.6s; }
-        .bar:nth-child(8) { animation-delay: 0.7s; }
-
-        .timer {
-            font-family: monospace;
-            font-size: 16px;
-            z-index: 2;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 5px;
         }
 
         .messages {
@@ -103,16 +79,10 @@
             margin-bottom: 6px;
             background: #f3f4f6;
             cursor: pointer;
-            transition: background-color 0.3s;
         }
 
         .message:hover {
             background: #e5e7eb;
-        }
-
-        .message-time {
-            font-size: 12px;
-            color: #666;
         }
 
         .controls {
@@ -131,51 +101,17 @@
             color: white;
             cursor: pointer;
             transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
         }
 
         .btn:disabled {
             background: #9ca3af !important;
             cursor: not-allowed;
-            transform: none !important;
         }
 
-        .btn:active:not(:disabled) {
-            transform: scale(0.95);
-        }
-
-        .call-btn {
-            background: #22c55e;
-        }
-
-        .call-btn:hover:not(:disabled) {
-            background: #16a34a;
-        }
-
-        .record-btn {
-            background: #3b82f6;
-        }
-
-        .record-btn.recording {
-            background: #ef4444;
-            animation: pulse 1.5s infinite;
-        }
-
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
-        }
-
-        .end-btn {
-            background: #ef4444;
-        }
-
-        .end-btn:hover:not(:disabled) {
-            background: #dc2626;
-        }
+        .call-btn { background: #22c55e; }
+        .record-btn { background: #3b82f6; }
+        .record-btn.recording { background: #ef4444; }
+        .end-btn { background: #ef4444; }
 
         .status-bar {
             background: #1f2937;
@@ -186,46 +122,18 @@
             justify-content: space-between;
             font-size: 14px;
         }
-
-        /* Ripple effect */
-        .ripple {
-            position: absolute;
-            background: rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            transform: scale(0);
-            animation: ripple 0.6s linear;
-            pointer-events: none;
-        }
-
-        @keyframes ripple {
-            to {
-                transform: scale(4);
-                opacity: 0;
-            }
-        }
     </style>
 </head>
 <body>
     <div class="phone">
-        <div class="screen" id="screen">
+        <div class="screen">
             <div class="display-text">Ready to Record</div>
-            <div class="visualizer">
-                <div class="bar"></div>
-                <div class="bar"></div>
-                <div class="bar"></div>
-                <div class="bar"></div>
-                <div class="bar"></div>
-                <div class="bar"></div>
-                <div class="bar"></div>
-                <div class="bar"></div>
-            </div>
-            <div class="timer">00:00</div>
+            <div class="transcript" id="transcript"></div>
+            <canvas class="visualizer" id="visualizer"></canvas>
         </div>
 
-        <div class="messages">
-            <div class="empty-message" style="text-align: center; color: #666;">
-                No messages yet
-            </div>
+        <div class="messages" id="messages">
+            <div style="text-align: center; color: #666;">No messages yet</div>
         </div>
 
         <div class="controls">
@@ -243,62 +151,119 @@
     <script>
         class VoiceRecorder {
             constructor() {
-                this.state = 'idle';
-                this.recordingTime = 0;
+                this.mediaRecorder = null;
+                this.audioChunks = [];
                 this.messages = [];
-                this.timerInterval = null;
+                this.isRecording = false;
+                this.stream = null;
+                this.recognition = null;
+                this.analyser = null;
+                this.animationFrame = null;
+
                 this.setupElements();
                 this.setupEventListeners();
+                this.setupSpeechRecognition();
+                this.setupVisualizer();
             }
 
             setupElements() {
-                this.screen = document.querySelector('.screen');
-                this.displayText = document.querySelector('.display-text');
-                this.timer = document.querySelector('.timer');
-                this.messagesContainer = document.querySelector('.messages');
                 this.callBtn = document.getElementById('callBtn');
                 this.recordBtn = document.getElementById('recordBtn');
                 this.endBtn = document.getElementById('endBtn');
-                this.messageCount = document.getElementById('messageCount');
+                this.displayText = document.querySelector('.display-text');
+                this.transcriptElem = document.getElementById('transcript');
+                this.messagesContainer = document.getElementById('messages');
                 this.status = document.getElementById('status');
-                this.visualizer = document.querySelector('.visualizer');
+                this.messageCount = document.getElementById('messageCount');
+                this.canvas = document.getElementById('visualizer');
+                this.canvasCtx = this.canvas.getContext('2d');
             }
 
             setupEventListeners() {
                 this.callBtn.addEventListener('click', () => this.startCall());
                 this.recordBtn.addEventListener('click', () => this.toggleRecording());
                 this.endBtn.addEventListener('click', () => this.endCall());
-                
-                // Add ripple effect to screen
-                this.screen.addEventListener('click', (e) => this.createRipple(e));
             }
 
-            createRipple(event) {
-                const ripple = document.createElement('div');
-                ripple.classList.add('ripple');
-                
-                const rect = this.screen.getBoundingClientRect();
-                const x = event.clientX - rect.left;
-                const y = event.clientY - rect.top;
-                
-                ripple.style.left = `${x}px`;
-                ripple.style.top = `${y}px`;
-                
-                this.screen.appendChild(ripple);
-                
-                ripple.addEventListener('animationend', () => {
-                    ripple.remove();
-                });
+            setupSpeechRecognition() {
+                if ('webkitSpeechRecognition' in window) {
+                    this.recognition = new webkitSpeechRecognition();
+                    this.recognition.continuous = true;
+                    this.recognition.interimResults = true;
+
+                    this.recognition.onresult = (event) => {
+                        const transcript = Array.from(event.results)
+                            .map(result => result[0].transcript)
+                            .join('');
+                        this.transcriptElem.textContent = transcript;
+                    };
+
+                    this.recognition.onerror = (event) => {
+                        console.error('Speech recognition error:', event.error);
+                    };
+                }
             }
 
-            startCall() {
-                this.state = 'calling';
-                this.updateDisplay('Call started!');
-                this.updateButtons();
+            setupVisualizer() {
+                // Set canvas size
+                this.canvas.width = this.canvas.offsetWidth;
+                this.canvas.height = this.canvas.offsetHeight;
+            }
+
+            async startCall() {
+                try {
+                    this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    this.setupAudioContext();
+                    this.recordBtn.disabled = false;
+                    this.endBtn.disabled = false;
+                    this.callBtn.disabled = true;
+                    this.displayText.textContent = 'Ready to record';
+                    this.status.textContent = 'READY';
+                } catch (err) {
+                    console.error('Error accessing microphone:', err);
+                    this.displayText.textContent = 'Microphone access denied';
+                }
+            }
+
+            setupAudioContext() {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioContext.createMediaStreamSource(this.stream);
+                this.analyser = audioContext.createAnalyser();
+                this.analyser.fftSize = 256;
+                source.connect(this.analyser);
+                this.drawVisualizer();
+            }
+
+            drawVisualizer() {
+                if (!this.analyser) return;
+
+                const bufferLength = this.analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                const width = this.canvas.width;
+                const height = this.canvas.height;
+                const barWidth = width / bufferLength * 2.5;
+
+                const draw = () => {
+                    this.animationFrame = requestAnimationFrame(draw);
+                    this.analyser.getByteFrequencyData(dataArray);
+
+                    this.canvasCtx.fillStyle = '#86efac';
+                    this.canvasCtx.fillRect(0, 0, width, height);
+
+                    let x = 0;
+                    for (let i = 0; i < bufferLength; i++) {
+                        const barHeight = (dataArray[i] / 255) * height;
+                        this.canvasCtx.fillStyle = `rgb(0, ${dataArray[i]}, 0)`;
+                        this.canvasCtx.fillRect(x, height - barHeight, barWidth, barHeight);
+                        x += barWidth + 1;
+                    }
+                };
+
+                draw();
             }
 
             toggleRecording() {
-                if (this.state === 'recording') {
+                if (this.isRecording) {
                     this.stopRecording();
                 } else {
                     this.startRecording();
@@ -306,78 +271,62 @@
             }
 
             startRecording() {
-                this.state = 'recording';
-                this.updateDisplay('Recording...');
-                this.recordingTime = 0;
-                this.updateButtons();
-                this.visualizer.classList.add('recording');
-                this.startTimer();
+                this.audioChunks = [];
+                this.mediaRecorder = new MediaRecorder(this.stream);
+                
+                this.mediaRecorder.ondataavailable = (event) => {
+                    this.audioChunks.push(event.data);
+                };
+
+                this.mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(this.audioChunks, { type: 'audio/wav' });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    this.saveMessage(audioUrl, this.transcriptElem.textContent);
+                };
+
+                this.mediaRecorder.start();
+                this.recognition?.start();
+                this.isRecording = true;
+                this.recordBtn.classList.add('recording');
+                this.displayText.textContent = 'Recording...';
+                this.status.textContent = 'RECORDING';
             }
 
             stopRecording() {
-                this.state = 'calling';
-                this.saveMessage();
-                this.updateDisplay('Message saved!');
-                this.updateButtons();
-                this.visualizer.classList.remove('recording');
-                this.stopTimer();
+                this.mediaRecorder?.stop();
+                this.recognition?.stop();
+                this.isRecording = false;
+                this.recordBtn.classList.remove('recording');
+                this.displayText.textContent = 'Recording saved';
+                this.status.textContent = 'READY';
+                this.transcriptElem.textContent = '';
             }
 
             endCall() {
-                if (this.state === 'recording') {
+                if (this.isRecording) {
                     this.stopRecording();
                 }
-                this.state = 'idle';
-                this.updateDisplay('Ready to Record');
-                this.updateButtons();
-                this.visualizer.classList.remove('recording');
-                this.stopTimer();
-            }
-
-            updateDisplay(text) {
-                this.displayText.textContent = text;
-                this.status.textContent = this.state.toUpperCase();
-            }
-
-            updateButtons() {
-                this.callBtn.disabled = this.state !== 'idle';
-                this.recordBtn.disabled = this.state === 'idle';
-                this.endBtn.disabled = this.state === 'idle';
                 
-                if (this.state === 'recording') {
-                    this.recordBtn.classList.add('recording');
-                } else {
-                    this.recordBtn.classList.remove('recording');
-                }
+                this.stream?.getTracks().forEach(track => track.stop());
+                cancelAnimationFrame(this.animationFrame);
+                
+                this.stream = null;
+                this.recordBtn.disabled = true;
+                this.endBtn.disabled = true;
+                this.callBtn.disabled = false;
+                this.displayText.textContent = 'Ready to start';
+                this.status.textContent = 'IDLE';
+                
+                // Clear visualizer
+                this.canvasCtx.fillStyle = '#86efac';
+                this.canvasCtx.fillRect(0, 0, this.canvas.width, this.canvas.height);
             }
 
-            startTimer() {
-                this.timerInterval = setInterval(() => {
-                    this.recordingTime++;
-                    if (this.recordingTime >= 30) {
-                        this.stopRecording();
-                        return;
-                    }
-                    this.updateTimer();
-                }, 1000);
-            }
-
-            stopTimer() {
-                clearInterval(this.timerInterval);
-                this.recordingTime = 0;
-                this.updateTimer();
-            }
-
-            updateTimer() {
-                const minutes = Math.floor(this.recordingTime / 60);
-                const seconds = this.recordingTime % 60;
-                this.timer.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-            }
-
-            saveMessage() {
+            saveMessage(audioUrl, transcript) {
                 const message = {
                     id: this.messages.length + 1,
-                    duration: this.recordingTime,
+                    audio: audioUrl,
+                    transcript: transcript,
                     timestamp: new Date().toLocaleTimeString()
                 };
                 this.messages.push(message);
@@ -387,18 +336,15 @@
             updateMessages() {
                 if (this.messages.length === 0) {
                     this.messagesContainer.innerHTML = `
-                        <div class="empty-message" style="text-align: center; color: #666;">
-                            No messages yet
-                        </div>
+                        <div style="text-align: center; color: #666;">No messages yet</div>
                     `;
                 } else {
                     this.messagesContainer.innerHTML = this.messages.map(msg => `
-                        <div class="message" onclick="voiceRecorder.playMessage(${msg.id})">
+                        <div class="message" onclick="voiceRecorder.playMessage(${msg.id - 1})">
                             <div>Message ${msg.id}</div>
-                            <div class="message-time">
-                                Duration: ${Math.floor(msg.duration / 60)}:${(msg.duration % 60).toString().padStart(2, '0')}
-                                <br>
-                                ${msg.timestamp}
+                            <div style="font-size: 12px; color: #666;">
+                                ${msg.timestamp}<br>
+                                ${msg.transcript ? `"${msg.transcript}"` : 'No transcript available'}
                             </div>
                         </div>
                     `).join('');
@@ -406,15 +352,15 @@
                 this.messageCount.textContent = `Messages: ${this.messages.length}`;
             }
 
-            playMessage(id) {
-                if (this.state === 'idle') {
-                    const message = this.messages.find(m => m.id === id);
-                    if (message) {
-                        this.updateDisplay(`Playing Message ${id}`);
-                        setTimeout(() => {
-                            this.updateDisplay('Ready to Record');
-                        }, 2000);
-                    }
+            playMessage(index) {
+                const message = this.messages[index];
+                if (message && message.audio) {
+                    const audio = new Audio(message.audio);
+                    audio.play();
+                    this.displayText.textContent = 'Playing message...';
+                    audio.onended = () => {
+                        this.displayText.textContent = 'Ready to record';
+                    };
                 }
             }
         }
